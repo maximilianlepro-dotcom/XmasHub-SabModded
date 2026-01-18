@@ -1,0 +1,307 @@
+-- Full GUI: Peek TP + Noclip + Auto Pickup (E) + Auto Sell (F)
+-- Updated: XmasHub • bigger size • white + semi-transparent
+
+local player = game.Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+-- ================================================
+-- PERMANENT NOCLIP
+-- ================================================
+local noclipConnection = nil
+local function enablePermanentNoclip()
+    if noclipConnection then noclipConnection:Disconnect() end
+   
+    noclipConnection = RunService.Stepped:Connect(function()
+        if not player.Character then return end
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end)
+end
+enablePermanentNoclip()
+player.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    enablePermanentNoclip()
+end)
+
+-- ================================================
+-- AUTO PICKUP (E) - every 3s, 12 studs
+-- ================================================
+local autoPickupEnabled = false
+local PICKUP_COOLDOWN = 3
+local PICKUP_MAX_DISTANCE = 12
+local lastPickupTime = 0
+local pickupCircle = nil
+
+local function createPickupCircle()
+    if pickupCircle then pickupCircle:Destroy() end
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart", 5)
+    if not hrp then return end
+   
+    pickupCircle = Instance.new("Part")
+    pickupCircle.Name = "PickupCircle"
+    pickupCircle.Shape = Enum.PartType.Cylinder
+    pickupCircle.Size = Vector3.new(PICKUP_MAX_DISTANCE*2, 0.1, PICKUP_MAX_DISTANCE*2)
+    pickupCircle.Transparency = 0.75
+    pickupCircle.BrickColor = BrickColor.new("Bright red")
+    pickupCircle.Material = Enum.Material.Neon
+    pickupCircle.CanCollide = false
+    pickupCircle.Anchored = false
+    pickupCircle.Parent = workspace
+   
+    local ap = Instance.new("AlignPosition", pickupCircle)
+    ap.MaxForce = Vector3.new(1e9,1e9,1e9)
+    ap.Responsiveness = 200
+   
+    local ao = Instance.new("AlignOrientation", pickupCircle)
+    ao.MaxTorque = Vector3.new(1e9,1e9,1e9)
+    ao.Responsiveness = 200
+   
+    RunService.Heartbeat:Connect(function()
+        if not pickupCircle or not hrp or not hrp.Parent then return end
+        local pos = hrp.Position - Vector3.new(0, 2.95, 0)
+        ap.Position = pos
+        ao.CFrame = CFrame.new(pos) * CFrame.Angles(math.rad(90), 0, 0)
+    end)
+end
+
+local function destroyPickupCircle()
+    if pickupCircle then pickupCircle:Destroy() pickupCircle = nil end
+end
+
+-- ================================================
+-- AUTO SELL (F) - every 2s, 12 studs
+-- ================================================
+local autoSellEnabled = false
+local SELL_COOLDOWN = 2
+local SELL_MAX_DISTANCE = 12
+local lastSellTime = 0
+local sellCircle = nil
+
+local function createSellCircle()
+    if sellCircle then sellCircle:Destroy() end
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart", 5)
+    if not hrp then return end
+   
+    sellCircle = Instance.new("Part")
+    sellCircle.Name = "SellCircle"
+    sellCircle.Shape = Enum.PartType.Cylinder
+    sellCircle.Size = Vector3.new(SELL_MAX_DISTANCE*2, 0.1, SELL_MAX_DISTANCE*2)
+    sellCircle.Transparency = 0.75
+    sellCircle.BrickColor = BrickColor.new("Bright blue")
+    sellCircle.Material = Enum.Material.Neon
+    sellCircle.CanCollide = false
+    sellCircle.Anchored = false
+    sellCircle.Parent = workspace
+   
+    local ap = Instance.new("AlignPosition", sellCircle)
+    ap.MaxForce = Vector3.new(1e9,1e9,1e9)
+    ap.Responsiveness = 200
+   
+    local ao = Instance.new("AlignOrientation", sellCircle)
+    ao.MaxTorque = Vector3.new(1e9,1e9,1e9)
+    ao.Responsiveness = 200
+   
+    RunService.Heartbeat:Connect(function()
+        if not sellCircle or not hrp or not hrp.Parent then return end
+        local pos = hrp.Position - Vector3.new(0, 2.95, 0)
+        ap.Position = pos
+        ao.CFrame = CFrame.new(pos) * CFrame.Angles(math.rad(90), 0, 0)
+    end)
+end
+
+local function destroySellCircle()
+    if sellCircle then sellCircle:Destroy() sellCircle = nil end
+end
+
+-- ================================================
+-- AUTO PICKUP + SELL CORE (unchanged)
+-- ================================================
+RunService.Heartbeat:Connect(function()
+    if not autoPickupEnabled then return end
+    local now = tick()
+    if now - lastPickupTime < PICKUP_COOLDOWN then return end
+    lastPickupTime = now
+    -- ... your original pickup logic ...
+    local character = player.Character
+    if not character then return end
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local bestPrompt = nil
+    local bestDist = PICKUP_MAX_DISTANCE
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") and obj.Enabled and obj.KeyboardKeyCode == Enum.KeyCode.E and obj.MaxActivationDistance > 0 then
+            local attachPart = obj.Parent
+            if not attachPart:IsA("BasePart") then attachPart = obj:FindFirstAncestorWhichIsA("BasePart") end
+            if attachPart then
+                local distance = (root.Position - attachPart.Position).Magnitude
+                if distance < bestDist then bestDist = distance bestPrompt = obj end
+            end
+        end
+    end
+    if bestPrompt then pcall(function() fireproximityprompt(bestPrompt) end) end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not autoSellEnabled then return end
+    local now = tick()
+    if now - lastSellTime < SELL_COOLDOWN then return end
+    lastSellTime = now
+    -- ... your original sell logic ...
+    local character = player.Character
+    if not character then return end
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local bestPrompt = nil
+    local bestDist = SELL_MAX_DISTANCE
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") and obj.Enabled and obj.KeyboardKeyCode == Enum.KeyCode.F and obj.MaxActivationDistance > 0 then
+            local attachPart = obj.Parent
+            if not attachPart:IsA("BasePart") then attachPart = obj:FindFirstAncestorWhichIsA("BasePart") end
+            if attachPart then
+                local distance = (root.Position - attachPart.Position).Magnitude
+                if distance < bestDist then bestDist = distance bestPrompt = obj end
+            end
+        end
+    end
+    if bestPrompt then pcall(function() fireproximityprompt(bestPrompt) end) end
+end)
+
+-- ================================================
+-- XmasHub GUI - Bigger • White • Semi-transparent
+-- ================================================
+local sg = Instance.new("ScreenGui")
+sg.Name = "XmasHubGui"
+sg.ResetOnSpawn = false
+sg.Parent = game.CoreGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 300, 0, 340)              -- bigger size
+frame.Position = UDim2.new(0.5, -150, 0.5, -170)    -- centered
+frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)  -- white
+frame.BackgroundTransparency = 0.25                 -- slight transparency
+frame.BorderSizePixel = 0
+frame.Parent = sg
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 12)
+uiCorner.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 50)
+title.BackgroundTransparency = 1
+title.Text = "XmasHub"
+title.TextColor3 = Color3.fromRGB(40, 40, 120)     -- dark blue text
+title.Font = Enum.Font.GothamBold
+title.TextSize = 26
+title.TextXAlignment = Enum.TextXAlignment.Center
+title.Parent = frame
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.new(0, 40, 0, 40)
+close.Position = UDim2.new(1, -46, 0, 5)
+close.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+close.Text = "×"
+close.TextColor3 = Color3.new(1,1,1)
+close.Font = Enum.Font.GothamBold
+close.TextSize = 24
+close.Parent = frame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 10)
+closeCorner.Parent = close
+
+-- Draggable
+local dragging, dragInput, dragStart, startPos
+title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+
+title.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if dragging and dragInput then
+        local delta = dragInput.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+close.MouseButton1Click:Connect(function()
+    sg:Destroy()
+    if noclipConnection then noclipConnection:Disconnect() end
+    destroyPickupCircle()
+    destroySellCircle()
+end)
+
+-- Buttons layout - bigger & cleaner
+local yOffset = 65
+local function newBtn(text, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.88, 0, 0, 52)
+    btn.Position = UDim2.new(0.06, 0, 0, yOffset)
+    btn.BackgroundColor3 = Color3.fromRGB(245, 245, 255)   -- very light blue-white
+    btn.BackgroundTransparency = 0.4
+    btn.TextColor3 = Color3.fromRGB(50, 50, 120)
+    btn.Text = text
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 18
+    btn.Parent = frame
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = btn
+    
+    btn.MouseButton1Click:Connect(callback)
+    yOffset = yOffset + 60
+    return btn
+end
+
+local savedCFrame = nil
+
+newBtn("Set TP Position", function()
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        savedCFrame = player.Character.HumanoidRootPart.CFrame
+        print("Position saved!")
+    end
+end)
+
+newBtn("TP", function()
+    if not savedCFrame then print("No position saved!") return end
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local hrp = player.Character.HumanoidRootPart
+    local old = hrp.CFrame
+    hrp.CFrame = savedCFrame + Vector3.new(0,3,0)
+    task.delay(1, function()
+        if player.Character and hrp.Parent then hrp.CFrame = old end
+    end)
+end)
+
+local pickupBtn = newBtn("Auto Pickup", function()
+    autoPickupEnabled = not autoPickupEnabled
+    pickupBtn.Text = "Auto Pickup (E): " .. (autoPickupEnabled and "ON" or "OFF")
+    if autoPickupEnabled then createPickupCircle() else destroyPickupCircle() end
+end)
+
+local sellBtn = newBtn("Auto Sell", function()
+    autoSellEnabled = not autoSellEnabled
+    sellBtn.Text = "Auto Sell" .. (autoSellEnabled and "ON" or "OFF")
+    if autoSellEnabled then createSellCircle() else destroySellCircle() end
+end)
+
+print("XmasHub loaded - bigger white semi-transparent GUI")
+print("Red circle = Pickup | Blue circle = Sell")
